@@ -1,6 +1,4 @@
 streamlit
 openai
-numpy
 pandas
-typing
-os
+numpy
