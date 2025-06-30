@@ -2,8 +2,114 @@ import openai
 import numpy as np
 import pandas as pd
 import streamlit as st
-from typing import List, Dict, Tuple
+import requests
+import json
+from typing import List, Dict, Tuple, Optional
 import os
+
+# =============================================================================
+# ZOHO RECRUIT API CREDENTIALS - EDIT THESE VALUES
+# =============================================================================
+ZOHO_CLIENT_ID = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"
+ZOHO_CLIENT_SECRET = "7117cda959e770d2145df1eb983a0b5eb94ec9a706" 
+ZOHO_REFRESH_TOKEN = "https://accounts.zoho.com/oauth/v2/authscope=ZohoRecruit.jobs.ALL&client_id=1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN&response_type=code&access_type=offline&redirect_uri=https://chatbot2nb9zjyd5xozoaclbxrqwh2.streamlit.app/"
+ZOHO_BASE_URL = "https://recruit.zoho.com/"
+TARGET_JOB_OPENING_ID = "ZR_1_JOB"
+
+# =============================================================================
+# ZOHO API HELPER FUNCTIONS - NEW SECTION
+# =============================================================================
+
+def get_zoho_access_token(client_id: str, client_secret: str, refresh_token: str) -> Optional[str]:
+    """
+    Exchange refresh token for access token with Zoho Recruit API
+    
+    Args:
+        client_id: Zoho Client ID
+        client_secret: Zoho Client Secret  
+        refresh_token: Zoho Refresh Token
+        
+    Returns:
+        Access token string or None if failed
+    """
+    token_url = "https://accounts.zoho.com/oauth/v2/token"
+    
+    payload = {
+        'refresh_token': refresh_token,
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'grant_type': 'refresh_token'
+    }
+    
+    try:
+        response = requests.post(token_url, data=payload)
+        response.raise_for_status()
+        
+        token_data = response.json()
+        return token_data.get('access_token')
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to get Zoho access token: {str(e)}")
+        return None
+    except json.JSONDecodeError:
+        st.error("Invalid response format from Zoho token endpoint")
+        return None
+
+def fetch_job_description_from_zoho(job_opening_id: str, access_token: str) -> Optional[str]:
+    """
+    Fetch job description from Zoho Recruit API
+    
+    Args:
+        job_opening_id: The Job Opening ID to fetch (e.g., "ZR_1_JOB")
+        access_token: Valid Zoho access token
+        
+    Returns:
+        Job description text or None if failed
+    """
+    url = f"{ZOHO_BASE_URL}/JobOpenings/{job_opening_id}"
+    
+    headers = {
+        'Authorization': f'Zoho-oauthtoken {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extract job description from the response
+        if 'data' in data and len(data['data']) > 0:
+            job_data = data['data'][0]
+            job_description = job_data.get('Job_Description', '')
+            
+            if job_description:
+                # Clean up rich text formatting if needed
+                # Remove HTML tags for better embedding processing
+                import re
+                clean_description = re.sub(r'<[^>]+>', '', job_description)
+                return clean_description.strip()
+            else:
+                st.error(f"No job description found for Job Opening ID: {job_opening_id}")
+                return None
+        else:
+            st.error(f"No data found for Job Opening ID: {job_opening_id}")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to fetch job from Zoho: {str(e)}")
+        return None
+    except json.JSONDecodeError:
+        st.error("Invalid response format from Zoho API")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error fetching job: {str(e)}")
+        return None
+
+# =============================================================================
+# JOB SIMILARITY ENGINE - ORIGINAL CODE (MOSTLY UNCHANGED)
+# =============================================================================
 
 class JobSimilarityEngine:
     def __init__(self, api_key: str = None):
@@ -49,7 +155,7 @@ class JobSimilarityEngine:
         Args:
             req_id: Requisition ID
             description: Job description text
-            time_to_fill: Time to fill in days (placeholder for now)
+            time_to_fill: Time to fill in days
         """
         embedding = self.get_embedding(description)
         if embedding:
@@ -113,52 +219,50 @@ class JobSimilarityEngine:
         else:
             return "Very Low Match"
     
-    def compare_job_descriptions(self, target_req_id: str) -> pd.DataFrame:
+    # MODIFIED: Now compares Zoho job against hardcoded jobs
+    def compare_zoho_job_to_hardcoded(self, zoho_job_description: str, zoho_job_id: str) -> pd.DataFrame:
         """
-        Compare a target job description against all others in the dataset
+        Compare a Zoho job description against hardcoded job descriptions
         
         Args:
-            target_req_id: The requisition ID to compare against others
+            zoho_job_description: Job description fetched from Zoho
+            zoho_job_id: The Zoho Job Opening ID
             
         Returns:
             DataFrame with comparison results
         """
-        # Find the target job
-        target_job = None
-        for job in self.job_data:
-            if job['req_id'] == target_req_id:
-                target_job = job
-                break
-        
-        if not target_job:
-            st.error(f"Job {target_req_id} not found in dataset")
+        # Get embedding for the Zoho job
+        zoho_embedding = self.get_embedding(zoho_job_description)
+        if not zoho_embedding:
             return None
         
-        # Compare against all other jobs
+        # Compare against all hardcoded jobs
         results = []
         for job in self.job_data:
-            if job['req_id'] != target_req_id:  # Don't compare to itself
-                similarity_score = self.calculate_similarity_score(
-                    target_job['embedding'], 
-                    job['embedding']
-                )
-                
-                analysis = self.get_similarity_analysis(similarity_score)
-                
-                results.append({
-                    'Requisition ID': target_job['req_id'],
-                    'Compared To': job['req_id'],
-                    'Similarity Score': round(similarity_score, 4),
-                    'Analysis': analysis,
-                    'Time to Fill': f"{job['time_to_fill']} days"
-                })
+            similarity_score = self.calculate_similarity_score(
+                zoho_embedding, 
+                job['embedding']
+            )
+            
+            analysis = self.get_similarity_analysis(similarity_score)
+            
+            results.append({
+                'Zoho Job Opening ID': zoho_job_id,
+                'Compared To': job['req_id'],
+                'Similarity Score': round(similarity_score, 4),
+                'Analysis': analysis,
+                'Time to Fill': f"{job['time_to_fill']} days"
+            })
         
         return pd.DataFrame(results)
 
-# Streamlit App Implementation
+# =============================================================================
+# STREAMLIT APP - MODIFIED UI
+# =============================================================================
+
 def main():
     st.title("🎯 Sourcingology: Job Description Similarity Engine")
-    st.subheader("Vector-based job matching prototype")
+    st.subheader("Vector-based job matching with Zoho Recruit integration")
     
     # Initialize the engine
     if 'engine' not in st.session_state:
@@ -174,116 +278,140 @@ def main():
         openai.api_key = api_key
         
         st.markdown("---")
-        st.subheader("📝 Sample Job Descriptions for Testing")
+        st.subheader("📝 Hardcoded Job Descriptions (Job 2 & Job 3)")
         
-        # Sample job descriptions for testing
-        job_descriptions = {
-            "REQ001": """
-            Senior Software Engineer - Backend Development
+        # HARDCODED JOB DESCRIPTIONS - Job 2 and Job 3 only
+        hardcoded_jobs = {
+            "Job 2": {
+                "description": """
+                Senior Backend Software Engineer - Python Focus
+                
+                Join our engineering team as a Senior Backend Software Engineer specializing in Python development.
+                Looking for someone with 5+ years of backend development experience.
+                
+                Key Responsibilities:
+                - Build and maintain scalable backend applications
+                - Develop REST APIs and work with microservices
+                - Partner with cross-functional teams including frontend and product
+                - Ensure code quality through testing and code reviews
+                
+                Qualifications:
+                - BS in Computer Science or equivalent experience
+                - Extensive Python and Django experience
+                - Strong database skills with PostgreSQL
+                - Cloud platform experience (AWS preferred)
+                - Strong analytical and communication abilities
+                """,
+                "time_to_fill": 76
+            },
             
-            We are seeking a Senior Software Engineer to join our backend development team. 
-            The ideal candidate will have 5+ years of experience in Python, Django, and PostgreSQL.
-            
-            Responsibilities:
-            - Design and implement scalable backend systems
-            - Work with REST APIs and microservices architecture
-            - Collaborate with frontend developers and product managers
-            - Write clean, maintainable code with comprehensive tests
-            
-            Requirements:
-            - Bachelor's degree in Computer Science or related field
-            - Strong experience with Python and Django framework
-            - Knowledge of database design and optimization
-            - Experience with cloud platforms (AWS, GCP)
-            - Excellent problem-solving and communication skills
-            """,
-            
-            "REQ002": """
-            Senior Backend Software Engineer - Python Focus
-            
-            Join our engineering team as a Senior Backend Software Engineer specializing in Python development.
-            Looking for someone with 5+ years of backend development experience.
-            
-            Key Responsibilities:
-            - Build and maintain scalable backend applications
-            - Develop REST APIs and work with microservices
-            - Partner with cross-functional teams including frontend and product
-            - Ensure code quality through testing and code reviews
-            
-            Qualifications:
-            - BS in Computer Science or equivalent experience
-            - Extensive Python and Django experience
-            - Strong database skills with PostgreSQL
-            - Cloud platform experience (AWS preferred)
-            - Strong analytical and communication abilities
-            """,
-            
-            "REQ003": """
-            Marketing Manager - Digital Campaigns
-            
-            We're looking for a creative Marketing Manager to lead our digital marketing initiatives.
-            This role requires 3+ years of marketing experience with a focus on digital channels.
-            
-            What you'll do:
-            - Develop and execute digital marketing campaigns
-            - Manage social media presence and content strategy
-            - Analyze campaign performance and ROI
-            - Collaborate with design and content teams
-            - Manage marketing budget and vendor relationships
-            
-            What we're looking for:
-            - Bachelor's degree in Marketing, Communications, or related field
-            - Proven experience with Google Ads, Facebook Ads, and SEO
-            - Strong analytical skills and data-driven mindset
-            - Experience with marketing automation tools
-            - Creative thinking and project management skills
-            """
+            "Job 3": {
+                "description": """
+                Marketing Manager - Digital Campaigns
+                
+                We're looking for a creative Marketing Manager to lead our digital marketing initiatives.
+                This role requires 3+ years of marketing experience with a focus on digital channels.
+                
+                What you'll do:
+                - Develop and execute digital marketing campaigns
+                - Manage social media presence and content strategy
+                - Analyze campaign performance and ROI
+                - Collaborate with design and content teams
+                - Manage marketing budget and vendor relationships
+                
+                What we're looking for:
+                - Bachelor's degree in Marketing, Communications, or related field
+                - Proven experience with Google Ads, Facebook Ads, and SEO
+                - Strong analytical skills and data-driven mindset
+                - Experience with marketing automation tools
+                - Creative thinking and project management skills
+                """,
+                "time_to_fill": 45
+            }
         }
         
-        # Display job descriptions
-        for req_id, description in job_descriptions.items():
-            with st.expander(f"📄 {req_id} - Click to view"):
-                st.text_area(f"Job Description ({req_id})", 
-                           value=description, 
+        # Display hardcoded job descriptions
+        for job_name, job_info in hardcoded_jobs.items():
+            with st.expander(f"📄 {job_name} - Click to view"):
+                st.text_area(f"Job Description ({job_name})", 
+                           value=job_info["description"], 
                            height=200, 
                            disabled=True)
+                st.write(f"**Time to Fill:** {job_info['time_to_fill']} days")
         
         st.markdown("---")
         
-        # Load sample data button
-        if st.button("🚀 Load Sample Data & Generate Embeddings"):
-            with st.spinner("Generating embeddings... This may take a moment."):
+        # NEW: Load hardcoded jobs button (simplified)
+        if st.button("🚀 Load Hardcoded Jobs for Comparison"):
+            with st.spinner("Generating embeddings for hardcoded jobs..."):
                 # Clear existing data
                 engine.job_data = []
                 
-                # Add job descriptions with different time-to-fill values for variety
-                time_to_fill_data = {"REQ001": 89, "REQ002": 76, "REQ003": 45}
-                
                 success_count = 0
-                for req_id, description in job_descriptions.items():
-                    if engine.add_job_description(req_id, description, time_to_fill_data[req_id]):
+                for job_name, job_info in hardcoded_jobs.items():
+                    if engine.add_job_description(
+                        job_name, 
+                        job_info["description"], 
+                        job_info["time_to_fill"]
+                    ):
                         success_count += 1
                 
-                if success_count == len(job_descriptions):
-                    st.success(f"✅ Successfully generated embeddings for {success_count} job descriptions!")
+                if success_count == len(hardcoded_jobs):
+                    st.success(f"✅ Successfully generated embeddings for {success_count} hardcoded jobs!")
                 else:
-                    st.error(f"❌ Only {success_count}/{len(job_descriptions)} embeddings generated successfully")
+                    st.error(f"❌ Only {success_count}/{len(hardcoded_jobs)} embeddings generated successfully")
         
-        # Comparison section
+        # NEW: Main comparison section
         if len(engine.job_data) > 0:
             st.markdown("---")
-            st.subheader("🔍 Similarity Analysis")
+            st.subheader("🔍 Zoho Integration & Comparison")
             
-            # Select target job for comparison
-            target_job = st.selectbox(
-                "Select the job description to compare against others:",
-                options=[job['req_id'] for job in engine.job_data],
-                index=0
-            )
+            # Display Zoho configuration
+            with st.expander("⚙️ Zoho API Configuration", expanded=False):
+                st.write(f"**Target Job Opening ID:** {TARGET_JOB_OPENING_ID}")
+                st.write(f"**Zoho Base URL:** {ZOHO_BASE_URL}")
+                st.warning("⚠️ Make sure to update the Zoho credentials at the top of the code!")
             
-            if st.button("🎯 Run Similarity Analysis"):
-                with st.spinner("Calculating similarities..."):
-                    results_df = engine.compare_job_descriptions(target_job)
+            # NEW: Single Compare button (replaces dropdown)
+            if st.button("🎯 Compare Job from Zoho", type="primary"):
+                with st.spinner("Fetching job from Zoho and calculating similarities..."):
+                    
+                    # Step 1: Get Zoho access token
+                    access_token = get_zoho_access_token(
+                        ZOHO_CLIENT_ID, 
+                        ZOHO_CLIENT_SECRET, 
+                        ZOHO_REFRESH_TOKEN
+                    )
+                    
+                    if not access_token:
+                        st.error("❌ Failed to get Zoho access token. Please check your credentials.")
+                        return
+                    
+                    # Step 2: Fetch job description from Zoho
+                    zoho_job_description = fetch_job_description_from_zoho(
+                        TARGET_JOB_OPENING_ID, 
+                        access_token
+                    )
+                    
+                    if not zoho_job_description:
+                        st.error(f"❌ Failed to fetch job description for {TARGET_JOB_OPENING_ID}")
+                        return
+                    
+                    # Step 3: Display the fetched job description
+                    st.success(f"✅ Successfully fetched job from Zoho!")
+                    with st.expander("📄 Fetched Job Description from Zoho", expanded=True):
+                        st.text_area(
+                            f"Job Description ({TARGET_JOB_OPENING_ID})", 
+                            value=zoho_job_description, 
+                            height=200, 
+                            disabled=True
+                        )
+                    
+                    # Step 4: Run similarity comparison
+                    results_df = engine.compare_zoho_job_to_hardcoded(
+                        zoho_job_description, 
+                        TARGET_JOB_OPENING_ID
+                    )
                     
                     if results_df is not None and not results_df.empty:
                         st.subheader("📊 Similarity Results")
@@ -314,31 +442,43 @@ def main():
                         with col3:
                             st.metric("Low Matches (<0.30)", len(low_matches))
                         
-                        # Explain the concept
-                        st.markdown("---")
-                        st.subheader("🧠 How Vector Similarity Works")
-                        
-                        st.markdown("""
-                        **Under the Hood:**
-                        
-                        1. **Vectorization**: Each job description is converted into a high-dimensional vector (embedding) using OpenAI's `text-embedding-3-small` model. These vectors capture semantic meaning.
-                        
-                        2. **Cosine Similarity**: We calculate the cosine of the angle between two vectors using the formula: `(A·B) / (||A|| × ||B||)`. Values range from -1 to 1, where:
-                           - **1.0** = Identical content
-                           - **0.8-0.95** = Very similar content
-                           - **0.5-0.8** = Moderately similar
-                           - **< 0.5** = Low similarity
-                        
-                        3. **Semantic Understanding**: Unlike keyword matching, embeddings understand context and meaning. "Backend Developer" and "Server-side Engineer" would score highly even without exact word matches.
-                        
-                        **Next Steps for Sourcingology:**
-                        - Scale to 100+ historical job descriptions
-                        - Use similarity scores to predict time-to-fill
-                        - Build sourcing strategy recommendations
-                        """)
+                        # Show most similar job for sourcing insights
+                        if not results_df.empty:
+                            best_match = results_df.loc[results_df['Similarity Score'].idxmax()]
+                            st.info(f"🎯 **Best Match:** {best_match['Compared To']} with {best_match['Similarity Score']:.3f} similarity ({best_match['Analysis']})")
+                            st.info(f"📅 **Estimated Time to Fill:** Based on {best_match['Compared To']}, expect approximately {best_match['Time to Fill']}")
                     
         else:
-            st.info("👆 Load the sample data first to see the similarity analysis")
+            st.info("👆 Load the hardcoded jobs first to enable comparison")
+        
+        # Educational section (unchanged)
+        if len(engine.job_data) > 0:
+            st.markdown("---")
+            st.subheader("🧠 How Vector Similarity Works")
+            
+            st.markdown("""
+            **Under the Hood:**
+            
+            1. **Vectorization**: Each job description is converted into a high-dimensional vector (embedding) using OpenAI's `text-embedding-3-small` model. These vectors capture semantic meaning.
+            
+            2. **Cosine Similarity**: We calculate the cosine of the angle between two vectors using the formula: `(A·B) / (||A|| × ||B||)`. Values range from -1 to 1, where:
+               - **1.0** = Identical content
+               - **0.8-0.95** = Very similar content
+               - **0.5-0.8** = Moderately similar
+               - **< 0.5** = Low similarity
+            
+            3. **Semantic Understanding**: Unlike keyword matching, embeddings understand context and meaning. "Backend Developer" and "Server-side Engineer" would score highly even without exact word matches.
+            
+            **Zoho Integration Benefits:**
+            - Real-time job description fetching
+            - Compare live job postings against historical data
+            - Build data-driven sourcing strategies
+            
+            **Next Steps for Sourcingology:**
+            - Scale to 100+ historical job descriptions
+            - Use similarity scores to predict time-to-fill
+            - Build sourcing strategy recommendations
+            """)
 
 if __name__ == "__main__":
     main()
