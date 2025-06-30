@@ -10,10 +10,10 @@ import os
 # =============================================================================
 # ZOHO RECRUIT API CREDENTIALS - EDIT THESE VALUES
 # =============================================================================
-ZOHO_CLIENT_ID = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"
-ZOHO_CLIENT_SECRET = "7117cda959e770d2145df1eb983a0b5eb94ec9a706" 
-ZOHO_REFRESH_TOKEN = "https://accounts.zoho.com/oauth/v2/authscope=ZohoRecruit.jobs.ALL&client_id=1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN&response_type=code&access_type=offline&redirect_uri=https://chatbot2nb9zjyd5xozoaclbxrqwh2.streamlit.app/"
-ZOHO_BASE_URL = "https://recruit.zoho.com/"
+ZOHO_CLIENT_ID = "your_client_id_here"
+ZOHO_CLIENT_SECRET = "your_client_secret_here" 
+ZOHO_REFRESH_TOKEN = "your_refresh_token_here"
+ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 TARGET_JOB_OPENING_ID = "ZR_1_JOB"
 
 # =============================================================================
@@ -42,17 +42,39 @@ def get_zoho_access_token(client_id: str, client_secret: str, refresh_token: str
     }
     
     try:
+        # Debug: Show what we're sending (without sensitive data)
+        st.write("🔍 **Debug Info:**")
+        st.write(f"- Token URL: {token_url}")
+        st.write(f"- Client ID: {client_id[:10]}..." if len(client_id) > 10 else f"- Client ID: {client_id}")
+        st.write(f"- Refresh Token: {refresh_token[:15]}..." if len(refresh_token) > 15 else f"- Refresh Token: {refresh_token}")
+        
         response = requests.post(token_url, data=payload)
-        response.raise_for_status()
+        
+        # Debug: Show response details
+        st.write(f"- Response Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            st.error(f"❌ HTTP {response.status_code}: {response.text}")
+            return None
         
         token_data = response.json()
-        return token_data.get('access_token')
+        
+        # Debug: Show response structure (without sensitive token)
+        st.write(f"- Response Keys: {list(token_data.keys())}")
+        
+        if 'access_token' in token_data:
+            st.success("✅ Successfully got access token!")
+            return token_data.get('access_token')
+        else:
+            st.error(f"❌ No access_token in response: {token_data}")
+            return None
         
     except requests.exceptions.RequestException as e:
-        st.error(f"Failed to get Zoho access token: {str(e)}")
+        st.error(f"❌ Request failed: {str(e)}")
         return None
-    except json.JSONDecodeError:
-        st.error("Invalid response format from Zoho token endpoint")
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Invalid JSON response: {str(e)}")
+        st.error(f"Raw response: {response.text}")
         return None
 
 def fetch_job_description_from_zoho(job_opening_id: str, access_token: str) -> Optional[str]:
@@ -367,10 +389,73 @@ def main():
             st.subheader("🔍 Zoho Integration & Comparison")
             
             # Display Zoho configuration
-            with st.expander("⚙️ Zoho API Configuration", expanded=False):
+            with st.expander("⚙️ Zoho API Configuration", expanded=True):
                 st.write(f"**Target Job Opening ID:** {TARGET_JOB_OPENING_ID}")
                 st.write(f"**Zoho Base URL:** {ZOHO_BASE_URL}")
-                st.warning("⚠️ Make sure to update the Zoho credentials at the top of the code!")
+                
+                # Credentials validation
+                st.subheader("🔐 Credential Check")
+                cred_issues = []
+                
+                if ZOHO_CLIENT_ID == "your_client_id_here":
+                    cred_issues.append("❌ Client ID not updated")
+                else:
+                    st.write(f"✅ Client ID: {ZOHO_CLIENT_ID[:10]}...")
+                
+                if ZOHO_CLIENT_SECRET == "your_client_secret_here":
+                    cred_issues.append("❌ Client Secret not updated")
+                else:
+                    st.write(f"✅ Client Secret: {ZOHO_CLIENT_SECRET[:10]}...")
+                
+                if ZOHO_REFRESH_TOKEN == "your_refresh_token_here":
+                    cred_issues.append("❌ Refresh Token not updated")
+                else:
+                    st.write(f"✅ Refresh Token: {ZOHO_REFRESH_TOKEN[:15]}...")
+                
+                if cred_issues:
+                    st.error("**Issues found:**")
+                    for issue in cred_issues:
+                        st.write(issue)
+                    st.warning("⚠️ Please update the credentials at the top of the code!")
+                else:
+                    st.success("✅ All credentials appear to be configured!")
+                
+                # Common troubleshooting tips
+                st.subheader("🛠️ Troubleshooting Tips")
+                st.markdown("""
+                **If you're getting a 400 error:**
+                1. **Check if your refresh token is still valid** - Refresh tokens can expire
+                2. **Verify your Client ID and Client Secret** - Must match your Zoho app exactly
+                3. **Ensure your Zoho app has proper permissions** for Recruit API
+                4. **Check the data center** - Your token URL might need to be region-specific:
+                   - US: `https://accounts.zoho.com/oauth/v2/token`
+                   - EU: `https://accounts.zoho.eu/oauth/v2/token` 
+                   - IN: `https://accounts.zoho.in/oauth/v2/token`
+                   - AU: `https://accounts.zoho.com.au/oauth/v2/token`
+                5. **Try generating a new refresh token** if the current one is old
+                
+                **Common error meanings:**
+                - **400 Bad Request**: Usually invalid credentials or malformed request
+                - **401 Unauthorized**: Invalid or expired token
+                - **403 Forbidden**: Insufficient permissions
+                """)
+            
+            # Test connection button
+            if st.button("🧪 Test Zoho Connection", help="Test your Zoho credentials"):
+                with st.spinner("Testing Zoho connection..."):
+                    access_token = get_zoho_access_token(
+                        ZOHO_CLIENT_ID, 
+                        ZOHO_CLIENT_SECRET, 
+                        ZOHO_REFRESH_TOKEN
+                    )
+                    
+                    if access_token:
+                        st.success("🎉 Zoho connection successful!")
+                        st.write(f"Access token received: {access_token[:20]}...")
+                    else:
+                        st.error("❌ Zoho connection failed. Check the debug info above.")
+            
+            st.markdown("---")
             
             # NEW: Single Compare button (replaces dropdown)
             if st.button("🎯 Compare Job from Zoho", type="primary"):
