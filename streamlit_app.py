@@ -10,9 +10,11 @@ import os
 # =============================================================================
 # ZOHO RECRUIT API CREDENTIALS - EDIT THESE VALUES
 # =============================================================================
-ZOHO_CLIENT_ID = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"
-ZOHO_CLIENT_SECRET = "7117cda959e770d2145df1eb983a0b5eb94ec9a706" 
-ZOHO_REFRESH_TOKEN = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"  # Should be a long alphanumeric string, NOT a URL
+# Self Client Credentials (Recommended for Free Tier)
+ZOHO_CLIENT_ID = "1000.AL6419HX3THLR4U73ZGWVMPGPTITNX"
+ZOHO_CLIENT_SECRET = "361cf827b2cb1e0903843319f0eb7856e3d6fdaac6" 
+ZOHO_REFRESH_TOKEN = "1000.21da772a2bc3ffbe3bfe8f49fa27ca19.b9fd5d0e77e39ae2ae1b33b325bbcb2d"  # You'll get this from the self-client flow
+
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 TARGET_JOB_OPENING_ID = "ZR_1_JOB"
 
@@ -355,7 +357,30 @@ def main():
         st.markdown("---")
         st.subheader("🔐 OAuth Setup Helper")
         
+        # Show plan limitations warning
+        st.warning("""
+        ⚠️ **Zoho Free Tier Limitations:** 
+        - API per user count: 0 (may restrict OAuth)
+        - Max API Credits/Day: 5,000
+        - If you're on the Free tier, OAuth might be limited. Consider upgrading to Standard tier.
+        """)
+        
         with st.expander("🚀 Generate Refresh Token (Click here if you don't have one)", expanded=False):
+            
+            # Method 1: Try Self-Client first
+            st.markdown("### Method 1: Self-Client (Recommended for Free Tier)")
+            st.info("Self-Client authentication sometimes works on free tiers. Try this first!")
+            
+            self_client_url = f"https://api-console.zoho.com/client/{ZOHO_CLIENT_ID}/refresh"
+            
+            if st.button("🔗 Try Self-Client Method"):
+                st.markdown(f"**[Click here for Self-Client setup →]({self_client_url})**")
+                st.info("This will take you directly to generate a refresh token without OAuth flow.")
+            
+            st.markdown("---")
+            
+            # Method 2: Full OAuth (if self-client doesn't work)
+            st.markdown("### Method 2: Full OAuth Flow")
             st.markdown("""
             **Step 1: Get Authorization Code**
             
@@ -368,7 +393,7 @@ def main():
             # Create authorization URL
             auth_url = f"https://accounts.zoho.com/oauth/v2/auth?scope=ZohoRecruit.modules.ALL&client_id={ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri={redirect_uri}"
             
-            if st.button("🔗 Go to Zoho Authorization"):
+            if st.button("🔗 Go to Zoho Authorization (Full OAuth)"):
                 st.markdown(f"**[Click here to authorize your app →]({auth_url})**")
                 st.info("After authorization, you'll be redirected back to this app. Copy the 'code' parameter from the URL.")
             
@@ -422,13 +447,31 @@ def main():
                             try:
                                 error_data = response.json()
                                 st.error(f"Error details: {error_data}")
+                                
+                                # Check for specific free tier errors
+                                if "insufficient" in str(error_data).lower() or "limit" in str(error_data).lower():
+                                    st.error("🚨 **This might be a Free Tier limitation!** Consider upgrading to Standard plan.")
                             except:
                                 st.error(f"Raw response: {response.text[:500]}...")
+                                
+                                # Check for HTML error pages (common with free tier limits)
+                                if "html" in response.text.lower():
+                                    st.error("🚨 **Received HTML error page - likely a Free Tier restriction!**")
                             
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
             
             st.markdown("---")
+            st.markdown("### 💰 Upgrade Recommendation")
+            st.info("""
+            **If you keep getting errors:**
+            1. **Upgrade to Zoho Standard tier** ($12/month) - includes proper API access
+            2. **Standard tier gives you:** 100,000 API credits/day + 250 API per user count
+            3. **This will likely solve all authentication issues**
+            
+            [Upgrade your Zoho plan here →](https://www.zoho.com/recruit/pricing.html)
+            """)
+            
             st.info("💡 **Tip:** Once you get the refresh token, update the `ZOHO_REFRESH_TOKEN` variable at the top of your code, then you can use the main comparison features!")
         
         st.markdown("---")
