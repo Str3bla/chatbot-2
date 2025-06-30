@@ -10,9 +10,9 @@ import os
 # =============================================================================
 # ZOHO RECRUIT API CREDENTIALS - EDIT THESE VALUES
 # =============================================================================
-ZOHO_CLIENT_ID = "your_client_id_here"
-ZOHO_CLIENT_SECRET = "your_client_secret_here" 
-ZOHO_REFRESH_TOKEN = "your_refresh_token_here"
+ZOHO_CLIENT_ID = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"
+ZOHO_CLIENT_SECRET = "7117cda959e770d2145df1eb983a0b5eb94ec9a706" 
+ZOHO_REFRESH_TOKEN = "https://accounts.zoho.com/oauth/v2/authscope=ZohoRecruit.jobs.ALL&client_id=1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN&response_type=code&access_type=offline&redirect_uri=https://chatbot2nb9zjyd5xozoaclbxrqwh2.streamlit.app/"
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 TARGET_JOB_OPENING_ID = "ZR_1_JOB"
 
