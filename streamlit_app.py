@@ -12,9 +12,15 @@ import os
 # =============================================================================
 ZOHO_CLIENT_ID = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"
 ZOHO_CLIENT_SECRET = "7117cda959e770d2145df1eb983a0b5eb94ec9a706" 
-ZOHO_REFRESH_TOKEN = "https://accounts.zoho.com/oauth/v2/authscope=ZohoRecruit.jobs.ALL&client_id=1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN&response_type=code&access_type=offline&redirect_uri=https://chatbot2nb9zjyd5xozoaclbxrqwh2.streamlit.app/"
+ZOHO_REFRESH_TOKEN = "1000.CX06DDYZOGZDBW33SLF0XAI4LRX5TN"  # Should be a long alphanumeric string, NOT a URL
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 TARGET_JOB_OPENING_ID = "ZR_1_JOB"
+
+# Data center options - change if needed
+ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"  # US
+# ZOHO_ACCOUNTS_URL = "https://accounts.zoho.eu"    # Europe
+# ZOHO_ACCOUNTS_URL = "https://accounts.zoho.in"    # India  
+# ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com.au" # Australia
 
 # =============================================================================
 # ZOHO API HELPER FUNCTIONS - NEW SECTION
@@ -32,7 +38,46 @@ def get_zoho_access_token(client_id: str, client_secret: str, refresh_token: str
     Returns:
         Access token string or None if failed
     """
-    token_url = "https://accounts.zoho.com/oauth/v2/token"
+    token_url = f"{ZOHO_ACCOUNTS_URL}/oauth/v2/token"
+    
+    # Validate inputs first
+    validation_errors = []
+    
+    if not client_id or client_id == "your_client_id_here":
+        validation_errors.append("❌ Client ID not set or still placeholder")
+    elif len(client_id) < 20:
+        validation_errors.append("❌ Client ID seems too short (should be ~65 characters)")
+        
+    if not client_secret or client_secret == "your_client_secret_here":
+        validation_errors.append("❌ Client Secret not set or still placeholder")
+    elif len(client_secret) < 30:
+        validation_errors.append("❌ Client Secret seems too short (should be ~32+ characters)")
+        
+    if not refresh_token or refresh_token == "your_refresh_token_here":
+        validation_errors.append("❌ Refresh Token not set or still placeholder")
+    elif refresh_token.startswith(('http://', 'https://')):
+        validation_errors.append("❌ Refresh Token appears to be a URL - it should be an alphanumeric string")
+    elif len(refresh_token) < 50:
+        validation_errors.append("❌ Refresh Token seems too short (should be 100+ characters)")
+    
+    if validation_errors:
+        st.error("**Validation Errors:**")
+        for error in validation_errors:
+            st.write(error)
+        st.markdown("""
+        **What you need:**
+        - **Client ID**: Long string like `1000.XXXXXXXXXX...` (~65 chars)
+        - **Client Secret**: String like `abc123def456...` (~32+ chars)  
+        - **Refresh Token**: Long alphanumeric string (~100+ chars), NOT a URL
+        
+        **How to get a proper refresh token:**
+        1. Go to [Zoho Developer Console](https://api-console.zoho.com/)
+        2. Create/select your app
+        3. Go to Client Secret tab
+        4. Generate a refresh token using the "Generate Code" process
+        5. The refresh token should look like: `1000.abc123def456...` (long string)
+        """)
+        return None
     
     payload = {
         'refresh_token': refresh_token,
@@ -45,8 +90,9 @@ def get_zoho_access_token(client_id: str, client_secret: str, refresh_token: str
         # Debug: Show what we're sending (without sensitive data)
         st.write("🔍 **Debug Info:**")
         st.write(f"- Token URL: {token_url}")
-        st.write(f"- Client ID: {client_id[:10]}..." if len(client_id) > 10 else f"- Client ID: {client_id}")
-        st.write(f"- Refresh Token: {refresh_token[:15]}..." if len(refresh_token) > 15 else f"- Refresh Token: {refresh_token}")
+        st.write(f"- Client ID: {client_id[:15]}..." if len(client_id) > 15 else f"- Client ID: {client_id}")
+        st.write(f"- Client Secret: {client_secret[:10]}..." if len(client_secret) > 10 else f"- Client Secret: {client_secret}")
+        st.write(f"- Refresh Token: {refresh_token[:20]}..." if len(refresh_token) > 20 else f"- Refresh Token: {refresh_token}")
         
         response = requests.post(token_url, data=payload)
         
@@ -54,7 +100,13 @@ def get_zoho_access_token(client_id: str, client_secret: str, refresh_token: str
         st.write(f"- Response Status: {response.status_code}")
         
         if response.status_code != 200:
-            st.error(f"❌ HTTP {response.status_code}: {response.text}")
+            # Try to extract meaningful error from HTML response
+            error_text = response.text
+            if "An error occurred" in error_text:
+                st.error(f"❌ Zoho returned an error page (HTTP {response.status_code})")
+                st.error("This usually means invalid credentials or wrong data center URL")
+            else:
+                st.error(f"❌ HTTP {response.status_code}: {response.text[:500]}...")
             return None
         
         token_data = response.json()
@@ -74,7 +126,7 @@ def get_zoho_access_token(client_id: str, client_secret: str, refresh_token: str
         return None
     except json.JSONDecodeError as e:
         st.error(f"❌ Invalid JSON response: {str(e)}")
-        st.error(f"Raw response: {response.text}")
+        st.error("This usually means you got an HTML error page instead of JSON")
         return None
 
 def fetch_job_description_from_zoho(job_opening_id: str, access_token: str) -> Optional[str]:
@@ -298,6 +350,86 @@ def main():
     
     if api_key:
         openai.api_key = api_key
+        
+        # NEW: OAuth Helper Section
+        st.markdown("---")
+        st.subheader("🔐 OAuth Setup Helper")
+        
+        with st.expander("🚀 Generate Refresh Token (Click here if you don't have one)", expanded=False):
+            st.markdown("""
+            **Step 1: Get Authorization Code**
+            
+            Click the button below to go to Zoho and authorize your app:
+            """)
+            
+            # Use the Streamlit app URL as redirect URI (matches what's registered in Zoho)
+            redirect_uri = "https://chatbot-2-nb9zjyd5xozoaclbxrqwh2.streamlit.app"
+            
+            # Create authorization URL
+            auth_url = f"https://accounts.zoho.com/oauth/v2/auth?scope=ZohoRecruit.modules.ALL&client_id={ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri={redirect_uri}"
+            
+            if st.button("🔗 Go to Zoho Authorization"):
+                st.markdown(f"**[Click here to authorize your app →]({auth_url})**")
+                st.info("After authorization, you'll be redirected back to this app. Copy the 'code' parameter from the URL.")
+            
+            st.markdown("**Step 2: Exchange Code for Refresh Token**")
+            
+            auth_code = st.text_input(
+                "Paste the authorization code here:",
+                placeholder="1000.abc123def456...",
+                help="Copy the 'code' parameter from the redirect URL"
+            )
+            
+            if st.button("🔄 Get Refresh Token") and auth_code:
+                with st.spinner("Exchanging code for refresh token..."):
+                    token_url = f"{ZOHO_ACCOUNTS_URL}/oauth/v2/token"
+                    
+                    payload = {
+                        'grant_type': 'authorization_code',
+                        'client_id': ZOHO_CLIENT_ID,
+                        'client_secret': ZOHO_CLIENT_SECRET,
+                        'redirect_uri': redirect_uri,  # Must match the one used in authorization
+                        'code': auth_code
+                    }
+                    
+                    try:
+                        st.write("🔍 **Debug - Token Exchange Request:**")
+                        st.write(f"- Token URL: {token_url}")
+                        st.write(f"- Client ID: {ZOHO_CLIENT_ID}")
+                        st.write(f"- Redirect URI: {redirect_uri}")
+                        st.write(f"- Code: {auth_code[:20]}...")
+                        
+                        response = requests.post(token_url, data=payload)
+                        st.write(f"- Response Status: {response.status_code}")
+                        
+                        if response.status_code == 200:
+                            token_data = response.json()
+                            st.write(f"- Response Keys: {list(token_data.keys())}")
+                            
+                            if 'refresh_token' in token_data:
+                                st.success("🎉 Success! Here's your refresh token:")
+                                st.code(token_data['refresh_token'], language='text')
+                                st.info("**IMPORTANT:** Copy this refresh token and update `ZOHO_REFRESH_TOKEN` in your code!")
+                                
+                                # Also show access token for immediate testing
+                                if 'access_token' in token_data:
+                                    st.success("🎯 You also got an access token (valid for 1 hour):")
+                                    st.code(token_data['access_token'], language='text')
+                            else:
+                                st.error(f"❌ No refresh token in response: {token_data}")
+                        else:
+                            st.error(f"❌ Failed to get tokens (HTTP {response.status_code}):")
+                            try:
+                                error_data = response.json()
+                                st.error(f"Error details: {error_data}")
+                            except:
+                                st.error(f"Raw response: {response.text[:500]}...")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+            
+            st.markdown("---")
+            st.info("💡 **Tip:** Once you get the refresh token, update the `ZOHO_REFRESH_TOKEN` variable at the top of your code, then you can use the main comparison features!")
         
         st.markdown("---")
         st.subheader("📝 Hardcoded Job Descriptions (Job 2 & Job 3)")
