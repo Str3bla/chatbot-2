@@ -2,7 +2,6 @@ import openai
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Dict, Tuple
 import os
 
@@ -74,11 +73,21 @@ class JobSimilarityEngine:
         Returns:
             Cosine similarity score (0-1, where 1 is identical)
         """
-        # Reshape for sklearn's cosine_similarity function
-        emb1 = np.array(embedding1).reshape(1, -1)
-        emb2 = np.array(embedding2).reshape(1, -1)
+        # Convert to numpy arrays
+        vec1 = np.array(embedding1)
+        vec2 = np.array(embedding2)
         
-        similarity = cosine_similarity(emb1, emb2)[0][0]
+        # Calculate cosine similarity manually using numpy
+        # cosine_similarity = (A · B) / (||A|| * ||B||)
+        dot_product = np.dot(vec1, vec2)
+        norm_vec1 = np.linalg.norm(vec1)
+        norm_vec2 = np.linalg.norm(vec2)
+        
+        # Handle zero vectors to avoid division by zero
+        if norm_vec1 == 0 or norm_vec2 == 0:
+            return 0.0
+        
+        similarity = dot_product / (norm_vec1 * norm_vec2)
         return similarity
     
     def get_similarity_analysis(self, score: float) -> str:
@@ -314,7 +323,7 @@ def main():
                         
                         1. **Vectorization**: Each job description is converted into a high-dimensional vector (embedding) using OpenAI's `text-embedding-3-small` model. These vectors capture semantic meaning.
                         
-                        2. **Cosine Similarity**: We calculate the cosine of the angle between two vectors. Values range from -1 to 1, where:
+                        2. **Cosine Similarity**: We calculate the cosine of the angle between two vectors using the formula: `(A·B) / (||A|| × ||B||)`. Values range from -1 to 1, where:
                            - **1.0** = Identical content
                            - **0.8-0.95** = Very similar content
                            - **0.5-0.8** = Moderately similar
