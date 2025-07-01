@@ -618,6 +618,7 @@ def main():
             # Test connection button
             if st.button("🧪 Test Zoho Connection", help="Test your Zoho credentials"):
                 with st.spinner("Testing Zoho connection..."):
+                    # Test the refresh token by getting an access token
                     access_token = get_zoho_access_token(
                         ZOHO_CLIENT_ID, 
                         ZOHO_CLIENT_SECRET, 
@@ -626,7 +627,17 @@ def main():
                     
                     if access_token:
                         st.success("🎉 Zoho connection successful!")
-                        st.write(f"Access token received: {access_token[:20]}...")
+                        st.write(f"✅ Got valid access token: {access_token[:20]}...")
+                        
+                        # Test API call with the access token
+                        st.write("🔍 Testing API call to Zoho Recruit...")
+                        test_job = fetch_job_description_from_zoho(TARGET_JOB_OPENING_ID, access_token)
+                        
+                        if test_job:
+                            st.success("🎯 API call successful! Job description retrieved.")
+                            st.write(f"📄 Job description preview: {test_job[:200]}...")
+                        else:
+                            st.warning("⚠️ Access token works, but couldn't fetch job description. Check if Job Opening ID exists.")
                     else:
                         st.error("❌ Zoho connection failed. Check the debug info above.")
             
