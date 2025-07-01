@@ -7,7 +7,7 @@ import pandas as pd
 # =============================================================================
 ZOHO_ACCESS_TOKEN = "1000.ea224242bd9685cde0dc047bd9374d3c.f10a0ddfe7e39a1de770c768b716b89d"
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
-JOB_ID = "ZR_1_JOB"
+JOB_ID = "821313000000528968"
 
 # =============================================================================
 # SIMPLE API TEST
