@@ -13,7 +13,7 @@ import os
 # Self Client Credentials (Recommended for Free Tier)
 ZOHO_CLIENT_ID = "1000.AL6419HX3THLR4U73ZGWVMPGPTITNX"
 ZOHO_CLIENT_SECRET = "361cf827b2cb1e0903843319f0eb7856e3d6fdaac6" 
-ZOHO_REFRESH_TOKEN = "your_refresh_token_here"  # You'll get this from the self-client flow
+ZOHO_REFRESH_TOKEN = "1000.a2569cee49d7c586c59ce16b365abaff.b559124946bdfaf6d1ca4ee51640f42a1"  # You'll get this from the self-client flow
 
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 TARGET_JOB_OPENING_ID = "ZR_1_JOB"
