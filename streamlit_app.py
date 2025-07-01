@@ -12,9 +12,9 @@ import re
 # =============================================================================
 ZOHO_CLIENT_ID = "1000.AL6419HX3THLR4U73ZGWVMPGPTITNX"
 ZOHO_CLIENT_SECRET = "361cf827b2cb1e0903843319f0eb7856e3d6fdaac6" 
-ZOHO_REFRESH_TOKEN = "1000.ea224242bd9685cde0dc047bd9374d3c.f10a0ddfe7e39a1de770c768b716b89d" #"1000.466acc48d4c03694e40103db8d666395.d988fc3c6631263b7a62e8c3642cfacc" #"1000.45d4aa00c8abce97e4c4874a1230a4.431db6551fcb0cbd32b637b31460eff3"
-ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2/JobOpenings"
-TARGET_JOB_OPENING_ID = "ZR_1_JOB"  # "Analyst II - ATS Engineering"
+ZOHO_REFRESH_TOKEN = "1000.7e3393a940e040d2fd0da57655803e28f.1bb619084ba92e2dba1098cdab304a15"
+ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
+TARGET_JOB_OPENING_ID = "821313000005285257"  # Internal record ID for "Analyst II - ATS Engineering"
 
 # =============================================================================
 # ZOHO API FUNCTIONS
@@ -200,6 +200,7 @@ def main():
     st.markdown("---")
     st.subheader("🎯 Target Job from Zoho")
     st.info(f"**Job Opening ID:** {TARGET_JOB_OPENING_ID} (Analyst II - ATS Engineering)")
+    st.caption("Using internal record ID from Zoho Recruit API")
     
     # Show comparison jobs
     st.subheader("📊 Historical Jobs for Comparison")
