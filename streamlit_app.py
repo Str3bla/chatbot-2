@@ -13,7 +13,7 @@ import re
 ZOHO_CLIENT_ID = "1000.AL6419HX3THLR4U73ZGWVMPGPTITNX"
 ZOHO_CLIENT_SECRET = "361cf827b2cb1e0903843319f0eb7856e3d6fdaac6" 
 ZOHO_REFRESH_TOKEN = "1000.45d4aa00c8abce97e4c4874a1230a4.431db6551fcb0cbd32b637b31460eff3"
-ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2/org891763725"
+ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2/JobOpenings"
 TARGET_JOB_OPENING_ID = "ZR_1_JOB"  # "Analyst II - ATS Engineering"
 
 # =============================================================================
