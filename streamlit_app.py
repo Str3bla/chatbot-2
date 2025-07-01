@@ -1,4 +1,40 @@
-import openai
+def fetch_job_from_zoho(job_id: str) -> Optional[str]:
+    """Fetch job description from Zoho Recruit"""
+    access_token = get_zoho_access_token()
+    if not access_token:
+        return None
+    
+    url = f"{ZOHO_BASE_URL}/JobOpenings/{job_id}"
+    headers = {
+        'Authorization': f'Zoho-oauthtoken {access_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and len(data['data']) > 0:
+                job_data = data['data'][0]
+                job_description = job_data.get('Job_Description', '')
+                job_title = job_data.get('Job_Opening_Name', 'Unknown Job')
+                
+                # Clean HTML tags from description
+                import re
+                clean_description = re.sub(r'<[^>]+>', '', job_description)
+                
+                return {
+                    'title': job_title,
+                    'description': clean_description.strip(),
+                    'raw_data': job_data
+                }
+        
+        st.error(f"❌ Job {job_id} not found or API error: {response.status_code}")
+        return None
+        
+    except Exception as e:
+        st.error(f"❌ Error fetching job: {str(e)}")
+        return Noneimport openai
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -12,7 +48,7 @@ import re
 # =============================================================================
 ZOHO_CLIENT_ID = "1000.AL6419HX3THLR4U73ZGWVMPGPTITNX"
 ZOHO_CLIENT_SECRET = "361cf827b2cb1e0903843319f0eb7856e3d6fdaac6" 
-ZOHO_REFRESH_TOKEN = "1000.7e3393a940e040d2fd0da57655803e28f.1bb619084ba92e2dba1098cdab304a15"
+ZOHO_ACCESS_TOKEN = "1000.ea224242bd9685cde0dc047bd9374d3c.f10a0ddfe7e39a1de770c768b716b89d"  # Direct access token
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 TARGET_JOB_OPENING_ID = "821313000005285257"  # Internal record ID for "Analyst II - ATS Engineering"
 
@@ -21,27 +57,8 @@ TARGET_JOB_OPENING_ID = "821313000005285257"  # Internal record ID for "Analyst 
 # =============================================================================
 
 def get_zoho_access_token() -> Optional[str]:
-    """Get fresh access token using refresh token"""
-    token_url = "https://accounts.zoho.com/oauth/v2/token"
-    
-    payload = {
-        'grant_type': 'refresh_token',
-        'client_id': ZOHO_CLIENT_ID,
-        'client_secret': ZOHO_CLIENT_SECRET,
-        'refresh_token': ZOHO_REFRESH_TOKEN
-    }
-    
-    try:
-        response = requests.post(token_url, data=payload)
-        if response.status_code == 200:
-            token_data = response.json()
-            return token_data.get('access_token')
-        else:
-            st.error(f"❌ Failed to get access token: {response.status_code}")
-            return None
-    except Exception as e:
-        st.error(f"❌ Error getting access token: {str(e)}")
-        return None
+    """Return the direct access token"""
+    return ZOHO_ACCESS_TOKEN
 
 def fetch_job_from_zoho(job_id: str) -> Optional[str]:
     """Fetch job description from Zoho Recruit"""
