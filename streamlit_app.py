@@ -5,7 +5,8 @@ import pandas as pd
 # =============================================================================
 # WORKING ZOHO CREDENTIALS (from successful curl test)
 # =============================================================================
-ZOHO_ACCESS_TOKEN = "1000.ea224242bd9685cde0dc047bd9374d3c.f10a0ddfe7e39a1de770c768b716b89d"
+# OLD WORKING VERSION --> ZOHO_ACCESS_TOKEN = "1000.ea224242bd9685cde0dc047bd9374d3c.f10a0ddfe7e39a1de770c768b716b89d"
+ZOHO_ACCESS_TOKEN = "1000.99caab3edbcead4378920359a1724a22.ea9160f50a9b33803f2d2c9b45188487"
 ZOHO_BASE_URL = "https://recruit.zoho.com/recruit/v2"
 JOB_ID = "821313000000528968"
 
